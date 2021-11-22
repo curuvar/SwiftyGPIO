@@ -49,8 +49,10 @@ extension SwiftyGPIO {
 
     // RaspberryPi A and B Revision 2 (After September 2012) - 26 pin header boards
     //TODO: Additional GPIO from 28-31 ignored for now
-    // 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 17, 18, 22, 23, 24, 25, 27
+    // 0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 17, 18, 22, 23, 24, 25, 27
     static let GPIORPIRev2: [GPIOName:GPIO] = [
+        .P0: RaspberryGPIO(name:"GPIO0", id:0, baseAddr:0x20000000),
+        .P1: RaspberryGPIO(name:"GPIO1", id:1, baseAddr:0x20000000),
         .P2: RaspberryGPIO(name:"GPIO2", id:2, baseAddr:0x20000000),
         .P3: RaspberryGPIO(name:"GPIO3", id:3, baseAddr:0x20000000),
         .P4: RaspberryGPIO(name:"GPIO4", id:4, baseAddr:0x20000000),
@@ -71,8 +73,10 @@ extension SwiftyGPIO {
     ]
 
     // RaspberryPi A+ and B+, Raspberry Zero - 40 pin header boards
-    // 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+    // 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
     static let GPIORPIPlusZERO: [GPIOName:GPIO] = [
+        .P0: RaspberryGPIO(name:"GPIO0", id:0, baseAddr:0x20000000),
+        .P1: RaspberryGPIO(name:"GPIO1", id:1, baseAddr:0x20000000),
         .P2: RaspberryGPIO(name:"GPIO2", id:2, baseAddr:0x20000000),
         .P3: RaspberryGPIO(name:"GPIO3", id:3, baseAddr:0x20000000),
         .P4: RaspberryGPIO(name:"GPIO4", id:4, baseAddr:0x20000000),
@@ -102,8 +106,10 @@ extension SwiftyGPIO {
     ]
 
     // RaspberryPi 2
-    // 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+    // 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
     static let GPIORPI2: [GPIOName:GPIO] = [
+        .P0: RaspberryGPIO(name:"GPIO0", id:0, baseAddr:0x3F000000),
+        .P1: RaspberryGPIO(name:"GPIO1", id:1, baseAddr:0x3F000000),
         .P2: RaspberryGPIO(name:"GPIO2", id:2, baseAddr:0x3F000000),
         .P3: RaspberryGPIO(name:"GPIO3", id:3, baseAddr:0x3F000000),
         .P4: RaspberryGPIO(name:"GPIO4", id:4, baseAddr:0x3F000000),
@@ -133,8 +139,10 @@ extension SwiftyGPIO {
     ]
  
      // RaspberryPi 4
-    // 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+    // 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
     static let GPIORPI4: [GPIOName:GPIO] = [
+        .P0: RaspberryGPIO(name:"GPIO0", id:0, baseAddr:0x7E000000),
+        .P1: RaspberryGPIO(name:"GPIO1", id:1, baseAddr:0x7E000000),
         .P2: RaspberryGPIO(name:"GPIO2", id:2, baseAddr:0x7E000000),
         .P3: RaspberryGPIO(name:"GPIO3", id:3, baseAddr:0x7E000000),
         .P4: RaspberryGPIO(name:"GPIO4", id:4, baseAddr:0x7E000000),
@@ -143,6 +151,8 @@ extension SwiftyGPIO {
         .P7: RaspberryGPIO(name:"GPIO7", id:7, baseAddr:0x7E000000),
         .P8: RaspberryGPIO(name:"GPIO8", id:8, baseAddr:0x7E000000),
         .P9: RaspberryGPIO(name:"GPIO9", id:9, baseAddr:0x7E000000),
+        .P10: RaspberryGPIO(name:"GPIO10", id:10, baseAddr:0x7E000000),
+        .P11: RaspberryGPIO(name:"GPIO11", id:11, baseAddr:0x7E000000),
         .P12: RaspberryGPIO(name:"GPIO12", id:12, baseAddr:0x7E000000),
         .P13: RaspberryGPIO(name:"GPIO13", id:13, baseAddr:0x7E000000),
         .P14: RaspberryGPIO(name:"GPIO14", id:14, baseAddr:0x7E000000),
@@ -150,6 +160,7 @@ extension SwiftyGPIO {
         .P16: RaspberryGPIO(name:"GPIO16", id:16, baseAddr:0x7E000000),
         .P17: RaspberryGPIO(name:"GPIO17", id:17, baseAddr:0x7E000000),
         .P18: RaspberryGPIO(name:"GPIO18", id:18, baseAddr:0x7E000000),
+        .P19: RaspberryGPIO(name:"GPIO19", id:19, baseAddr:0x7E000000),
         .P20: RaspberryGPIO(name:"GPIO20", id:20, baseAddr:0x7E000000),
         .P21: RaspberryGPIO(name:"GPIO21", id:21, baseAddr:0x7E000000),
         .P22: RaspberryGPIO(name:"GPIO22", id:22, baseAddr:0x7E000000),
