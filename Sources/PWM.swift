@@ -50,19 +50,25 @@ extension SwiftyGPIO {
 
     // RaspberryPis ARMv6 (all 1, Zero, Zero W) PWMs, only accessible ones, divided in channels (can use only one for each channel)
     static let PWMRPI1: [Int:[GPIOName:PWMOutput]] = [
-        0: [.P12: RaspberryPWM(gpioId: 12, alt: 0, channel:0, baseAddr: 0x20000000), .P18: RaspberryPWM(gpioId: 18, alt: 5, channel:0, baseAddr: 0x20000000)],
-        1: [.P13: RaspberryPWM(gpioId: 13, alt: 0, channel:1, baseAddr: 0x20000000), .P19: RaspberryPWM(gpioId: 19, alt: 5, channel:1, baseAddr: 0x20000000)]
+        0: [.P12: RaspberryPWM(gpioId: 12, alt: 0, channel:0, phy: RaspberryPHY.phyFor(baseAddr: 0x20000000)), 
+            .P18: RaspberryPWM(gpioId: 18, alt: 5, channel:0, phy: RaspberryPHY.phyFor(baseAddr: 0x20000000))],
+        1: [.P13: RaspberryPWM(gpioId: 13, alt: 0, channel:1, phy: RaspberryPHY.phyFor(baseAddr: 0x20000000)), 
+            .P19: RaspberryPWM(gpioId: 19, alt: 5, channel:1, phy: RaspberryPHY.phyFor(baseAddr: 0x20000000))]
     ]
 
     // RaspberryPis ARMv7 (2-3) PWMs, only accessible ones, divided in channels (can use only one for each channel)
     static let PWMRPI23: [Int:[GPIOName:PWMOutput]] = [
-        0: [.P12: RaspberryPWM(gpioId: 12, alt: 0, channel:0, baseAddr: 0x3F000000), .P18: RaspberryPWM(gpioId: 18, alt: 5, channel:0, baseAddr: 0x3F000000)],
-        1: [.P13: RaspberryPWM(gpioId: 13, alt: 0, channel:1, baseAddr: 0x3F000000), .P19: RaspberryPWM(gpioId: 19, alt: 5, channel:1, baseAddr: 0x3F000000)]
+        0: [.P12: RaspberryPWM(gpioId: 12, alt: 0, channel:0, phy: RaspberryPHY.phyFor(baseAddr: 0x3F000000)), 
+            .P18: RaspberryPWM(gpioId: 18, alt: 5, channel:0, phy: RaspberryPHY.phyFor(baseAddr: 0x3F000000))],
+        1: [.P13: RaspberryPWM(gpioId: 13, alt: 0, channel:1, phy: RaspberryPHY.phyFor(baseAddr: 0x3F000000)), 
+            .P19: RaspberryPWM(gpioId: 19, alt: 5, channel:1, phy: RaspberryPHY.phyFor(baseAddr: 0x3F000000))]
     ]
     // RaspberryPi 4 PWMs, only accessible ones, divided in channels (can use only one for each channel)
     static let PWMRPI4: [Int:[GPIOName:PWMOutput]] = [
-        0: [.P12: RaspberryPWM(gpioId: 12, alt: 0, channel:0, baseAddr: 0xFE000000), .P18: RaspberryPWM(gpioId: 18, alt: 5, channel:0, baseAddr: 0xFE000000)],
-        1: [.P13: RaspberryPWM(gpioId: 13, alt: 0, channel:1, baseAddr: 0xFE000000), .P19: RaspberryPWM(gpioId: 19, alt: 5, channel:1, baseAddr: 0xFE000000)]
+        0: [.P12: RaspberryPWM(gpioId: 12, alt: 0, channel:0, phy: RaspberryPHY.phyFor(baseAddr: 0xFE000000)), 
+            .P18: RaspberryPWM(gpioId: 18, alt: 5, channel:0, phy: RaspberryPHY.phyFor(baseAddr: 0xFE000000))],
+        1: [.P13: RaspberryPWM(gpioId: 13, alt: 0, channel:1, phy: RaspberryPHY.phyFor(baseAddr: 0xFE000000)), 
+            .P19: RaspberryPWM(gpioId: 19, alt: 5, channel:1, phy: RaspberryPHY.phyFor(baseAddr: 0xFE000000))]
     ] 
 }
 
@@ -79,11 +85,21 @@ public protocol PWMOutput {
     func cleanupPattern()
 }
 
-public class RaspberryPWM: PWMOutput {
-    let gpioId: UInt
-    let alt: UInt
-    let channel: Int
-    let pwmdma: Int
+final public class RaspberryPHY {
+     private static var existingPhy: RaspberryPHY? = nil
+
+     static func phyFor(baseAddr: UInt) -> RaspberryPHY {
+         // If the physical base has changed, throw away the existing cache.
+         // This generally shouldn't happen, as the base address is fixed.
+         // It is reasonable to create a new instance if there is a mismatch, though.
+         if let phy = existingPhy, phy.BCM2708_PERI_BASE == baseAddr {
+             return phy
+         }
+
+         let phy = RaspberryPHY(baseAddr: baseAddr)
+         existingPhy = phy
+         return phy
+     }
 
     let BCM2708_PERI_BASE: UInt
     let GPIO_BASE: UInt  // GPIO Register
@@ -95,6 +111,103 @@ public class RaspberryPWM: PWMOutput {
     var gpioBasePointer: UnsafeMutablePointer<UInt32>!
     var pwmBasePointer: UnsafeMutablePointer<UInt32>!
     var clockBasePointer: UnsafeMutablePointer<UInt32>!
+    var dmaBasePointers: [UnsafeMutablePointer<UInt32>]! = []
+
+    public private(set) var isInitialized: Bool = false
+    public private(set) var isReadyForPwm: Bool = false
+    
+    public init(baseAddr: UInt) {
+        BCM2708_PERI_BASE = baseAddr
+        GPIO_BASE = BCM2708_PERI_BASE + 0x200000  // GPIO Register
+        PWM_BASE =  BCM2708_PERI_BASE + 0x20C000  // PWM Register
+        CLOCK_BASE = BCM2708_PERI_BASE + 0x101000 // Clock Manager Register
+        PWM_PHY_BASE = BCM2708_PHY_BASE + 0x20C000 // PWM controller physical address
+    }
+
+    func initPhy() {
+        guard !isInitialized else { return }
+
+        var mem_fd: Int32 = 0
+
+        //The only mem device that support PWM is /dev/mem
+        mem_fd=open("/dev/mem", O_RDWR | O_SYNC)
+
+        guard mem_fd > 0 else {
+            fatalError("Can't open /dev/mem , use sudo!")
+        }
+
+        gpioBasePointer = memmap(from: mem_fd, at: Int(GPIO_BASE))
+        pwmBasePointer = memmap(from: mem_fd, at: Int(PWM_BASE))
+        clockBasePointer = memmap(from: mem_fd, at: Int(CLOCK_BASE))
+
+        let DMAOffsets: [UInt] = [0x00007000, 0x00007100, 0x00007200, 0x00007300,
+                                  0x00007400, 0x00007500, 0x00007600, 0x00007700,
+                                  0x00007800, 0x00007900, 0x00007a00, 0x00007b00,
+                                  0x00007c00, 0x00007d00, 0x00007e00, 0x00e05000]
+
+        for dma_addr in DMAOffsets.map({ BCM2708_PERI_BASE + $0 }) {
+            let pageOffset = Int(dma_addr % UInt(PAGE_SIZE))
+            let adjusted_dma_addr = Int(dma_addr) - pageOffset
+            let dma_map = UnsafeMutableRawPointer(memmap(from: mem_fd, at: adjusted_dma_addr))
+
+            let dmaBasePointer = (dma_map + pageOffset).assumingMemoryBound(to: UInt32.self)
+            dmaBasePointers.append(dmaBasePointer)
+        }
+
+        close(mem_fd)
+    }
+
+    func setPwmClock() {
+        guard !isReadyForPwm else { return }
+
+        killClock()
+
+        let idiv = UInt32(2) // 250Mhz base frequency
+        // Configure the clock and divisor that will be used to generate the signal
+        clockBasePointer.advanced(by: 41).pointee = CLKM_PASSWD | (idiv << CLKM_DIV_DIVI)            //CM CTL DIV register: Set DIVI value
+        clockBasePointer.advanced(by: 40).pointee = CLKM_PASSWD | CLKM_CTL_ENAB | CLKM_CTL_SRC_PLLD  //CM CTL register: Enable clock, MASH 0, source PLLD
+        pwmBasePointer.pointee = 0                                                                   //PWM CTL register: Everything at 0, enable flag included, disables previous PWM
+        usleep(10)
+
+        isReadyForPwm = true
+    }
+
+    func killClock() {
+        clockBasePointer.advanced(by: 40).pointee = CLKM_PASSWD | CLKM_CTL_KILL     //CM CTL register: Set KILL flag
+        usleep(10)
+
+        isReadyForPwm = false
+     }
+
+    /// Maps a block of memory and returns the pointer
+    internal func memmap(from mem_fd: Int32, at offset: Int) -> UnsafeMutablePointer<UInt32> {
+        let m = mmap(
+            nil,                 //Any adddress in our space will do
+            PAGE_SIZE,          //Map length
+            PROT_READ|PROT_WRITE, // Enable reading & writting to mapped memory
+            MAP_SHARED,          //Shared with other processes
+            mem_fd,              //File to map
+            off_t(offset)     //Offset to GPIO peripheral
+            )!
+
+        if (Int(bitPattern: m) == -1) {    //MAP_FAILED not available, but its value is (void*)-1
+            perror("mmap error")
+            abort()
+        }
+        let pointer = m.assumingMemoryBound(to: UInt32.self)
+
+        return pointer
+    }
+}
+
+public class RaspberryPWM: PWMOutput {
+    let gpioId: UInt
+    let alt: UInt
+    let channel: Int
+    let pwmdma: Int
+
+    let phy: RaspberryPHY
+
     var dmaBasePointer: UnsafeMutablePointer<UInt32>!
     var dmaCallbackPointer: UnsafeMutablePointer<DMACallback>! = nil
     var pwmRawPointer: UnsafeMutablePointer<UInt32>! = nil
@@ -107,51 +220,19 @@ public class RaspberryPWM: PWMOutput {
     var patternDelay: Int = 0
     var dataLength: Int = 0
 
-    public init(gpioId: UInt, alt: UInt, channel: Int, baseAddr: UInt, dmanum: Int = 5) {
+    public init(gpioId: UInt, alt: UInt, channel: Int, phy: RaspberryPHY, dmanum: Int = 5) {
+        self.phy = phy
         self.gpioId = gpioId
         self.alt = alt
         self.channel = channel
         self.pwmdma = dmanum
-        BCM2708_PERI_BASE = baseAddr
-        GPIO_BASE = BCM2708_PERI_BASE + 0x200000  // GPIO Register
-        PWM_BASE =  BCM2708_PERI_BASE + 0x20C000  // PWM Register
-        CLOCK_BASE = BCM2708_PERI_BASE + 0x101000 // Clock Manager Register
-        PWM_PHY_BASE = BCM2708_PHY_BASE + 0x20C000 // PWM controller physical address
+ 
     }
 
     /// Init PWM on this pin, set alternative function
     public func initPWM() {
-        var mem_fd: Int32 = 0
-
-        //The only mem device that support PWM is /dev/mem
-        mem_fd=open("/dev/mem", O_RDWR | O_SYNC)
-
-        guard mem_fd > 0 else {
-            fatalError("Can't open /dev/mem , use sudo!")
-        }
-
-        gpioBasePointer = memmap(from: mem_fd, at: GPIO_BASE)
-        pwmBasePointer = memmap(from: mem_fd, at: PWM_BASE)
-        clockBasePointer = memmap(from: mem_fd, at: CLOCK_BASE)
-
-        let DMAOffsets: [UInt] = [0x00007000, 0x00007100, 0x00007200, 0x00007300,
-                                 0x00007400, 0x00007500, 0x00007600, 0x00007700,
-                                 0x00007800, 0x00007900, 0x00007a00, 0x00007b00,
-                                 0x00007c00, 0x00007d00, 0x00007e00, 0x00e05000]
-
-        func dmanumToPhysicalAddress(_ dmanum: Int) -> UInt {
-            guard dmanum < DMAOffsets.count else { return 0 }
-            return BCM2708_PERI_BASE + DMAOffsets[dmanum]
-        }
-
-        var dma_addr = dmanumToPhysicalAddress(pwmdma) // Address of a specific DMA Channel registers set
-        let pageOffset = Int( dma_addr % UInt(PAGE_SIZE) )
-        dma_addr -= UInt(pageOffset)
-
-        let dma_map = UnsafeMutableRawPointer(memmap(from: mem_fd, at: dma_addr))
-        dmaBasePointer = (dma_map + pageOffset).assumingMemoryBound(to: UInt32.self)
-
-        close(mem_fd)
+        phy.initPhy()
+        dmaBasePointer = phy.dmaBasePointers[pwmdma]
 
         // set PWM alternate function for this GPIO
         setAlt()
@@ -161,34 +242,36 @@ public class RaspberryPWM: PWMOutput {
     /// The signal starts, asynchronously(manged by a device external to the CPU), once this method is called and
     /// needs to be stopped manually calling `stopPWM()`.
     public func startPWM(period ns: Int, duty percent: Float) {
-        // Kill the clock
-        clockBasePointer.advanced(by: 40).pointee = CLKM_PASSWD | CLKM_CTL_KILL     //CM CTL register: Set KILL flag
-        usleep(10)
+        if !phy.isReadyForPwm {
+            phy.setPwmClock()
+        }
 
-        // If the required frequency is too high, this value reduces the number of samples (scale does the opposite)
-        let highFreqSampleReduction: UInt32 = (ns < 750) ? 10 : 1
+        // @ 250Mhz, one slot in the PWM channel is 4 ns. All valid periods are multiples of that.
+        // Pick a range that is at least as large as requested that we can represent, and round the
+        // desired duty cycle to the nearest whole slot.
+        //
+        // Double precision is used here to handle very low frequencies in the range of <15Hz.
+        // Otherwise we lose precision calculating data. 
+        let range = UInt32(max((Double(ns) / 4.0).rounded(.awayFromZero), 1))
 
-        let freq = UInt32( (1_000_000_000/UInt(ns)) * 100 / UInt(highFreqSampleReduction) )
-        let clkSrc: ClockSource = (BCM2708_PERI_BASE != UInt(0xFE000000)) ? .PLLD : .PLLDPi4 //Differend Oscillator/PLLD freq for Pi4
-        let (idiv, scale) = calculateDIVI(base: clkSrc, desired: UInt32(freq))                                //Using the faster (with known freq) available clock to reduce jitter
+        let data = min(UInt32((Double(percent) * Double(range) / 100.0).rounded(.toNearestOrAwayFromZero)), range)
 
-        // Configure the clock and divisor that will be used to generate the signal
-        clockBasePointer.advanced(by: 41).pointee = CLKM_PASSWD | (idiv << CLKM_DIV_DIVI)            //CM CTL DIV register: Set DIVI value
-        clockBasePointer.advanced(by: 40).pointee = CLKM_PASSWD | CLKM_CTL_ENAB | CLKM_CTL_SRC_PLLD  //CM CTL register: Enable clock, MASH 0, source PLLD
-        pwmBasePointer.pointee = 0                                                                   //PWM CTL register: Everything at 0, enable flag included, disables previous PWM
-        usleep(10)
         // Configure the parameters for the M/S algorithm, S the number of total slots in RNG1 and M the number of slots with high value in DAT1
         let RNG = (channel == 0) ? 4 : 8
         let DAT = (channel == 0) ? 5 : 9
-        pwmBasePointer.advanced(by: RNG).pointee = 100 * scale / highFreqSampleReduction                                    //RNG1 register
-        pwmBasePointer.advanced(by: DAT).pointee = UInt32((percent / Float(highFreqSampleReduction)) * Float(scale))   //DAT1 register
+        phy.pwmBasePointer.advanced(by: RNG).pointee = range             //RNG1 register
+        phy.pwmBasePointer.advanced(by: DAT).pointee = data              //DAT1 register
         let PWMCTL_MSEN = (channel == 0) ? PWMCTL_MSEN1 : PWMCTL_MSEN2
         let PWMCTL_PWEN = (channel == 0) ? PWMCTL_PWEN1 : PWMCTL_PWEN2
-        pwmBasePointer.pointee = PWMCTL_MSEN | PWMCTL_PWEN                                                              //PWM CTL register, channel enabled, M/S mode
+
+        phy.pwmBasePointer.pointee |= PWMCTL_MSEN | PWMCTL_PWEN          //PWM CTL register, channel enabled, M/S mode
     }
 
     public func stopPWM() {
-        pwmBasePointer.pointee = 0      //PWM CTL register, everything at 0, enable flag included
+        let PWMCTL_MSEN = (channel == 0) ? PWMCTL_MSEN1 : PWMCTL_MSEN2
+        let PWMCTL_PWEN = (channel == 0) ? PWMCTL_PWEN1 : PWMCTL_PWEN2
+        
+        phy.pwmBasePointer.pointee &= ~PWMCTL_MSEN & ~PWMCTL_PWEN      //PWM CTL register, clear just the channel.    
     }
 
     /// Maps a block of memory and returns the pointer
@@ -214,7 +297,7 @@ public class RaspberryPWM: PWMOutput {
     /// Set the alternative function for this GPIO
     internal func setAlt() {
         let altid = (self.alt<=3) ? UInt32(self.alt+4) : self.alt==4 ? UInt32(3) : UInt32(2)
-        let ptr = gpioBasePointer.advanced(by: Int(gpioId/10))       // GPFSELn 0..5
+        let ptr = phy.gpioBasePointer.advanced(by: Int(gpioId/10))       // GPFSELn 0..5
         ptr.pointee &= ~(7<<((UInt32(gpioId)%10)*3))
         ptr.pointee |=  (altid<<((UInt32(gpioId)%10)*3))
     }
@@ -305,11 +388,12 @@ extension RaspberryPWM {
     public func cleanupPattern() {
         dma_wait()
         // Stop the PWM
-        pwmBasePointer.pointee = 0
+        phy.pwmBasePointer.pointee = 0
         usleep(10)
         // Stop the clock killing the clock
-        clockBasePointer.advanced(by: 40).pointee = CLKM_PASSWD | CLKM_CTL_KILL     //Set KILL flag
+        phy.clockBasePointer.advanced(by: 40).pointee = CLKM_PASSWD | CLKM_CTL_KILL     //Set KILL flag
         usleep(10)
+        phy.killClock()
 
         mailbox.cleanup()
     }
@@ -337,7 +421,7 @@ extension RaspberryPWM {
 
         // Round up to page size multiple
         let mboxsize = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1)
-        mailbox = MailBox(handle: -1, size: mboxsize, isRaspi2: BCM2708_PERI_BASE != 0x20000000)
+        mailbox = MailBox(handle: -1, size: mboxsize, isRaspi2: phy.BCM2708_PERI_BASE != 0x20000000)
 
         guard let mailbox = mailbox else {fatalError("Could allocate mailbox.")}
 
@@ -351,33 +435,33 @@ extension RaspberryPWM {
         }
 
         // Stop the PWM
-        pwmBasePointer.pointee = 0
+        phy.pwmBasePointer.pointee = 0
         usleep(10)
         // Stop the clock killing the clock
-        clockBasePointer.advanced(by: 40).pointee = CLKM_PASSWD | CLKM_CTL_KILL     //Set KILL flag
+        phy.killClock()
         usleep(10)
         // Check the BUSY flag, doesn't always work
         //while (clockBasePointer.advanced(by: 40).pointee & (1 << 7)) != 0 {}
 
         // Configure clock
-        let clkSrc: ClockSource = (BCM2708_PERI_BASE != UInt(0xFE000000)) ? .PLLD : .PLLDPi4 //Differend Oscillator/PLLD freq for Pi4
+        let clkSrc: ClockSource = (phy.BCM2708_PERI_BASE != UInt(0xFE000000)) ? .PLLD : .PLLDPi4 //Differend Oscillator/PLLD freq for Pi4
         let idiv = calculateUnscaledDIVI(base: clkSrc, desired: UInt32(symbolBits * patternFrequency))
-        clockBasePointer.advanced(by: 41).pointee = CLKM_PASSWD | (idiv << CLKM_DIV_DIVI)             //Set DIVI value
-        clockBasePointer.advanced(by: 40).pointee = CLKM_PASSWD | CLKM_CTL_ENAB | CLKM_CTL_SRC_PLLD   //Enable clock, MASH 0, source PLLD
+        phy.clockBasePointer.advanced(by: 41).pointee = CLKM_PASSWD | (idiv << CLKM_DIV_DIVI)             //Set DIVI value
+        phy.clockBasePointer.advanced(by: 40).pointee = CLKM_PASSWD | CLKM_CTL_ENAB | CLKM_CTL_SRC_PLLD   //Enable clock, MASH 0, source PLLD
         usleep(10)
         // Check the BUSY flag, doesn't always work
         //while (clockBasePointer.advanced(by: 40).pointee & (1 << 7)) != 0 {}
 
         // Configure PWM
-        pwmBasePointer.advanced(by: 4).pointee = 32         // RNG1: 32-bits per word to serialize
+        phy.pwmBasePointer.advanced(by: 4).pointee = 32         // RNG1: 32-bits per word to serialize
         usleep(10)
-        pwmBasePointer.pointee = PWMCTL_CLRF1
+        phy.pwmBasePointer.pointee = PWMCTL_CLRF1
         usleep(10)
-        pwmBasePointer.advanced(by: 2).pointee = PWMDMAC_ENAB | 7 << PWMDMAC_PANIC | 3 << PWMDMAC_DREQ
+        phy.pwmBasePointer.advanced(by: 2).pointee = PWMDMAC_ENAB | 7 << PWMDMAC_PANIC | 3 << PWMDMAC_DREQ
         usleep(10)
-        pwmBasePointer.pointee = PWMCTL_USEF1 | PWMCTL_MODE1 //| PWMCTL_USEF2 | PWMCTL_MODE2 // For 2nd chan
+        phy.pwmBasePointer.pointee = PWMCTL_USEF1 | PWMCTL_MODE1 //| PWMCTL_USEF2 | PWMCTL_MODE2 // For 2nd chan
         usleep(10)
-        pwmBasePointer.pointee |= PWMCTL_PWEN1               //| PWMCTL_PWEN2 // For 2nd chan
+        phy.pwmBasePointer.pointee |= PWMCTL_PWEN1               //| PWMCTL_PWEN2 // For 2nd chan
 
         // Initialize the DMA control block
         dmaCallbackPointer.pointee = DMACallback(
@@ -387,7 +471,7 @@ extension RaspberryPWM {
                 UInt32(0x5  << DMATI_PERMAP) |     // PWM peripheral
             DMATI_SRC_INC,                     // Increment src addr
             source_ad: UInt32(mailbox.virtualTobaseBusAddress(UnsafeMutableRawPointer(pwmRawPointer))),
-            dest_ad: UInt32(PWM_PHY_BASE + 0x18),   // PWM FIF1 Register, shared between channels
+            dest_ad: UInt32(phy.PWM_PHY_BASE + 0x18),   // PWM FIF1 Register, shared between channels
             txfr_len: UInt32(dataSize),
             stride: 0,
             nextconbk: 0)
