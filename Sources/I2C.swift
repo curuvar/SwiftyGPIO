@@ -76,14 +76,14 @@ public protocol I2CInterface {
     func readWord(_ address: Int, command: UInt8) -> UInt16
     func readData(_ address: Int, command: UInt8) -> [UInt8]
     func readI2CData(_ address: Int, command: UInt8) -> [UInt8]
-    func readRaw(_ address: Int, length: UInt) -> [UInt8]
+    func readRaw(_ address: Int, length: Int) -> [UInt8]
 
     func tryReadByte(_ address: Int) -> UInt8?
     func tryReadByte(_ address: Int, command: UInt8) -> UInt8?
     func tryReadWord(_ address: Int, command: UInt8) -> UInt16?
     func tryReadData(_ address: Int, command: UInt8) -> [UInt8]?
     func tryReadI2CData(_ address: Int, command: UInt8) -> [UInt8]?
-    func tryReadRaw(_ address: Int, length: UInt) -> [UInt8]?
+    func tryReadRaw(_ address: Int, length: Int) -> [UInt8]?
 
     @discardableResult func writeQuick(_ address: Int) -> Bool
     @discardableResult func writeByte(_ address: Int, value: UInt8) -> Bool
@@ -254,12 +254,12 @@ public final class SysFSI2C: I2CInterface {
         return buf
     }
 
-    public func readRaw(_ address: Int, length: UInt) -> [UInt8] {
+    public func readRaw(_ address: Int, length: Int) -> [UInt8] {
         var buf: [UInt8] = [UInt8](repeating:0, count: length)
 
         setSlaveAddress(address)
 
-        let r =  read( Int32( i2cId ), &buf, Int( length ) )
+        let r =  read( Int32( i2cId ), &buf, length )
 
         if r < 0 {
             perror("I2C read failed")
@@ -268,12 +268,12 @@ public final class SysFSI2C: I2CInterface {
         return buf
     }
 
-    public func tryReadRaw(_ address: Int, length: UInt) -> [UInt8]? {
+    public func tryReadRaw(_ address: Int, length: Int) -> [UInt8]? {
         var buf: [UInt8] = [UInt8](repeating:0, count: length)
 
         setSlaveAddress(address)
 
-        let r =  read( Int32( i2cId ), &buf, Int( length ) )
+        let r =  read( Int32( i2cId ), &buf, length )
 
         if r < 0 { return nil }
 
