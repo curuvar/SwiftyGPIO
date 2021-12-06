@@ -259,7 +259,7 @@ public final class SysFSI2C: I2CInterface {
 
         setSlaveAddress(address)
 
-        let r =  read( i2cId, &buf, length )
+        let r =  read( Int32( i2cId ), &buf, Int( length ) )
 
         if r < 0 {
             perror("I2C read failed")
@@ -273,7 +273,7 @@ public final class SysFSI2C: I2CInterface {
 
         setSlaveAddress(address)
 
-        let r =  read( i2cId, &buf, length )
+        let r =  read( Int32( i2cId ), &buf, Int( length ) )
 
         if r < 0 { return nil }
 
