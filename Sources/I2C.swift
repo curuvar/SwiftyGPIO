@@ -257,7 +257,7 @@ public final class SysFSI2C: I2CInterface {
     public func readRaw(_ address: Int, length: Int) -> [UInt8] {
         var buf: [UInt8] = [UInt8](repeating:0, count: length)
 
-        let i2cStatus = ioctl( file, I2C_SLAVE, CInt( slave ) )
+        let i2cStatus = ioctl( file, I2C_SLAVE, CInt( address ) )
          
         if i2cStatus != 0 { 
             print( "ioctl failed" ) 
@@ -278,7 +278,7 @@ public final class SysFSI2C: I2CInterface {
 
         setSlaveAddress(address)
 
-        let i2cStatus = ioctl( file, I2C_SLAVE, CInt( slave ) )
+        let i2cStatus = ioctl( file, I2C_SLAVE, CInt( address ) )
          
         guard i2cStatus == 0 else { return nil } 
 
