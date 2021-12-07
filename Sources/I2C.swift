@@ -132,7 +132,7 @@ public final class SysFSI2C: I2CInterface {
 
         let r =  i2c_smbus_read_byte()
 
-        if r < 0 { return nil }
+        guard r >= 0 else { return nil }
 
       #if swift(>=4.0)
         return UInt8(truncatingIfNeeded: r)
@@ -162,7 +162,7 @@ public final class SysFSI2C: I2CInterface {
 
         let r =  i2c_smbus_read_byte_data(command: command)
 
-        if r < 0 { return nil; }
+        guard r >= 0 else { return nil }
 
       #if swift(>=4.0)
         return UInt8(truncatingIfNeeded: r)
@@ -192,7 +192,7 @@ public final class SysFSI2C: I2CInterface {
 
         let r =  i2c_smbus_read_word_data(command: command)
 
-        if r < 0 { return nil }
+        guard r >= 0 else { return nil }
 
       #if swift(>=4.0)
         return UInt16(truncatingIfNeeded: r)
@@ -220,9 +220,9 @@ public final class SysFSI2C: I2CInterface {
 
         setSlaveAddress(address)
 
-        let r =  i2c_smbus_read_block_data(command: command, values: &buf)
+        let r = i2c_smbus_read_block_data(command: command, values: &buf)
 
-        if r < 0 { return nil }
+        guard r >= 0 else { return nil }
 
         return buf
     }
@@ -247,9 +247,9 @@ public final class SysFSI2C: I2CInterface {
 
         setSlaveAddress(address)
 
-        let r =  i2c_smbus_read_i2c_block_data(command: command, values: &buf)
+        let r = i2c_smbus_read_i2c_block_data(command: command, values: &buf)
 
-        if r < 0 { return nil }
+        guard r >= 0 else { return nil }
 
         return buf
     }
@@ -257,7 +257,12 @@ public final class SysFSI2C: I2CInterface {
     public func readRaw(_ address: Int, length: Int) -> [UInt8] {
         var buf: [UInt8] = [UInt8](repeating:0, count: length)
 
-        setSlaveAddress(address)
+        let i2cStatus = ioctl( file, I2C_SLAVE, CInt( slave ) )
+         
+        if i2cStatus != 0 { 
+            print( "ioctl failed" ) 
+            abort();
+        }
 
         let r =  read( Int32( i2cId ), &buf, length )
 
@@ -273,9 +278,13 @@ public final class SysFSI2C: I2CInterface {
 
         setSlaveAddress(address)
 
+        let i2cStatus = ioctl( file, I2C_SLAVE, CInt( slave ) )
+         
+        guard i2cStatus == 0 else { return nil } 
+
         let r =  read( Int32( i2cId ), &buf, length )
 
-        if r < 0 { return nil }
+        guard r >= 0 else { return nil }
 
         return buf
     }
