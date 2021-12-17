@@ -34,7 +34,6 @@
 #endif
 
 import Foundation
-import SwiftyGPIO
 
 // ============================================================================
 //  Extension SwiftyGPIO
