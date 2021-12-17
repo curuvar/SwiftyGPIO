@@ -293,8 +293,8 @@ The I2C interface can be used to communicate using the SMBus protocol on a I2C b
 To obtain a reference to the `I2CInterface` object, call the `hardwareI2Cs(for:)` utility method of the SwiftyGPIO class:
 
 ```swift
-let i2cs = SwiftyGPIO.hardwareI2Cs(for:.RaspberryPi3)!
-let i2c = i2cs[1]
+let i2cs = SwiftyGPIO.hardwareI2Cs(for:.RaspberryPi3)
+let i2c = i2cs[1]!
 ```
 
 On Raspberry Pi and other boards this interface could not enabled by default, always verify its state checking the setup guide on the [wiki](https://github.com/uraimo/SwiftyGPIO/wiki/Enabling-I2C-on-the-Raspberry-Pi) to enable it if needed using `raspi-config`.
@@ -319,19 +319,6 @@ func writeAndRead(_ address: Int, write: [UInt8], readLength: UInt) -> [UInt8]
 
 ```
 
-There are also versions of the read functions that throw an error to indicate a read failure:
-
-```swift
-func tryReadByte(_ address: Int) throws -> UInt8
-func tryReadByte(_ address: Int, command: UInt8) throws -> UInt8
-func tryReadWord(_ address: Int, command: UInt8) throws -> UInt16
-func tryReadData(_ address: Int, command: UInt8) throws -> [UInt8]
-func tryReadI2CData(_ address: Int, command: UInt8) throws -> [UInt8]
-func tryReadRaw(_ address: Int, length: Int) throws -> [UInt8]
-func tryWriteAndRead(_ address: Int, write: [UInt8], readLength: UInt) throws -> [UInt8]
-
-```
-
 Reading and writing data blocks supports two modes, a standard SMBus mode (`readData` and `writeData`) that prepends the length of the block before the actual data, and an old style I2C mode (`readI2CData` and `writeI2CData`) that just send the data without additional metadata. Depending on the device, only one of the two modes will be supported.
 
 Let's suppose that we want to read the seconds register (id 0) from a DS1307 RTC clock, that has an I2C address of 0x68:
@@ -343,13 +330,13 @@ print(i2c.readByte(0x68, command: 0)) //Prints the value of the 8bit register
 You should choose the same way one of the write functions available, just note that `writeQuick` is used to perform quick commands and does not perform a normal write. SMBus's quick commands are usually used to turn on/off devices or perform similar tasks that don't require additional parameters.  The write functions return `true` on success and `false` on failure.
 
 ```swift
-func writeQuick(_ address: Int) -> Bool
+func writeQuick(_ address: Int)
 
-func writeByte(_ address: Int, value: UInt8) -> Bool
-func writeByte(_ address: Int, command: UInt8, value: UInt8) -> Bool
-func writeWord(_ address: Int, command: UInt8, value: UInt16) -> Bool
-func writeData(_ address: Int, command: UInt8, values: [UInt8]) -> Bool
-func writeI2CData(_ address: Int, command: UInt8, values: [UInt8]) -> Bool
+func writeByte(_ address: Int, value: UInt8)
+func writeByte(_ address: Int, command: UInt8, value: UInt8)
+func writeWord(_ address: Int, command: UInt8, value: UInt16)
+func writeData(_ address: Int, command: UInt8, values: [UInt8])
+func writeI2CData(_ address: Int, command: UInt8, values: [UInt8])
 ```
 
 While using the I2C functionality doesn't require additional software to function, the tools contained in `i2c-tools` are useful to perform I2C transactions manually to verify that everything is working correctly.
