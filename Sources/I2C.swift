@@ -415,13 +415,18 @@ public final class I2C: I2CInterface
     {
         try setSlaveAddress( slaveAddress )
 
-        var valuesData = values
+        var data = [UInt8]( repeating:0, count: values.count + 1 )
+
+        for i in 1...values.count {
+            data[i] = values[i-1]
+        }
+
+        data[0] = UInt8( values.count )
 
         let r = smbus_ioctl(rw:      I2C_SMBUS_WRITE,
                             command: command,
                             size:    Int32( values.count ),
-                            data:    &valuesData )
-
+                            data:    &data )
 
         guard r >= 0 else { throw POSIXError( POSIXError.Code( rawValue: errno ) ?? POSIXError.EIO ) }
     }
