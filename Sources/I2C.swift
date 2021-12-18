@@ -101,7 +101,8 @@ public protocol I2CInterface
     func writeWord    ( _ slaveAddress: Int, command: UInt8, value: UInt16) throws
     func writeData    ( _ slaveAddress: Int, command: UInt8, values: [UInt8]) throws
     func writeI2CData ( _ slaveAddress: Int, command: UInt8, values: [UInt8]) throws
-    
+    func writeRaw     ( _ slaveAddress: Int, values: [UInt8]) throws
+
     func writeAndRead ( _ slaveAddress: Int, write: [UInt8], readLength: UInt) throws -> [UInt8]
 }
 
@@ -209,7 +210,7 @@ public final class I2C: I2CInterface
     {
         try setSlaveAddress( slaveAddress )
 
-        var data = [UInt8]( repeating:0, count: I2C_DEFAULT_PAYLOAD_LENGTH )
+        var data = [UInt8]( repeating:0, count: SMB_MAX_PAYLOAD_LENGTH )
 
         let r = smbus_ioctl( rw:      I2C_SMBUS_READ,
                              command: command,
@@ -218,7 +219,7 @@ public final class I2C: I2CInterface
 
         guard r >= 0 else { throw POSIXError( POSIXError.Code( rawValue: errno ) ?? POSIXError.EIO ) }
 
-        guard data[0] <=  I2C_DEFAULT_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EMSGSIZE ) }
+        guard data[0] <=  SMB_MAX_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EMSGSIZE ) }
 
         return Array<UInt8>( data[ 1 ... Int( data[0] )] )
     }
@@ -231,7 +232,7 @@ public final class I2C: I2CInterface
     {
         try setSlaveAddress( slaveAddress )
 
-        var data = [UInt8]( repeating: 0, count: I2C_DEFAULT_PAYLOAD_LENGTH )
+        var data = [UInt8]( repeating: 0, count: SMB_MAX_PAYLOAD_LENGTH )
 
         let r = smbus_ioctl( rw:      I2C_SMBUS_READ,
                              command: command,
@@ -240,7 +241,7 @@ public final class I2C: I2CInterface
 
         guard r >= 0 else { throw POSIXError( POSIXError.Code( rawValue: errno ) ?? POSIXError.EIO ) }
 
-        guard r <= I2C_DEFAULT_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EMSGSIZE ) }
+        guard r <= SMB_MAX_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EMSGSIZE ) }
 
         return Array<UInt8>( data[0 ..< Int( r )] )
     }
@@ -268,9 +269,6 @@ public final class I2C: I2CInterface
 
     public func writeAndRead(_ slaveAddress: Int, write: [UInt8], readLength: UInt) throws -> [UInt8]  
     {
-        guard    write.count<=I2C_DEFAULT_PAYLOAD_LENGTH 
-              && readLength<=I2C_DEFAULT_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EINVAL ) }
-
         try setSlaveAddress( slaveAddress )
 
         var writeData = write
@@ -364,7 +362,7 @@ public final class I2C: I2CInterface
     }
 
     // ------------------------------------------------------------------------
-    //  Function writeByte  (with command)
+    //  Function writeWord  (with command)
     // ------------------------------------------------------------------------
 
     public func writeWord( _ slaveAddress: Int, command: UInt8, value: UInt16 ) throws
@@ -387,7 +385,7 @@ public final class I2C: I2CInterface
 
     public func writeData(_ slaveAddress: Int, command: UInt8, values: [UInt8]) throws
     {
-        guard values.count <= I2C_DEFAULT_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EINVAL ) }
+        guard values.count <= SMB_MAX_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EINVAL ) }
 
         try setSlaveAddress( slaveAddress )
 
@@ -410,9 +408,12 @@ public final class I2C: I2CInterface
     // ------------------------------------------------------------------------
     //  Function writeI2CData (with command)
     // ------------------------------------------------------------------------
-
+    /// Write data to I2C bus
+    
     public func writeI2CData( _ slaveAddress: Int, command: UInt8, values: [UInt8] ) throws
     {
+        guard values.count <= SMB_MAX_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EINVAL ) }
+
         try setSlaveAddress( slaveAddress )
 
         var data = [UInt8]( repeating:0, count: values.count + 1 )
@@ -425,12 +426,27 @@ public final class I2C: I2CInterface
 
         let r = smbus_ioctl(rw:      I2C_SMBUS_WRITE,
                             command: command,
-                            size:    Int32( values.count ),
+                            size:    I2C_SMBUS_I2C_BLOCK_DATA,
                             data:    &data )
 
         guard r >= 0 else { throw POSIXError( POSIXError.Code( rawValue: errno ) ?? POSIXError.EIO ) }
     }
  
+    // ------------------------------------------------------------------------
+    //  Function writeRaw
+    // ------------------------------------------------------------------------
+
+    public func writeRaw( _ slaveAddress: Int, values: [UInt8] ) throws
+    {
+        try setSlaveAddress( slaveAddress )
+
+        var writeData = values
+
+        let r =  write( fd, &writeData, values.count )
+
+        guard r >= 0 else { throw POSIXError( POSIXError.Code( rawValue: errno ) ?? POSIXError.EIO ) }
+    }
+
     // ------------------------------------------------------------------------
     //  Function isReachable
     // ------------------------------------------------------------------------
@@ -579,7 +595,7 @@ internal let I2C_SLAVE_FORCE: UInt = 0x706
 internal let I2C_RDWR: UInt = 0x707
 internal let I2C_PEC: UInt = 0x708
 internal let I2C_SMBUS: UInt = 0x720
-internal let I2C_DEFAULT_PAYLOAD_LENGTH: Int = 32
+internal let SMB_MAX_PAYLOAD_LENGTH: Int = 32
 internal let I2CBASEPATH="/dev/i2c-"
 
 internal let I2C_M_RD: UInt16 = 0x0001
