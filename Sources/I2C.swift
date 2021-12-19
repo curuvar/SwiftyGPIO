@@ -92,7 +92,7 @@ public protocol I2CInterface
     func readByte     ( _ slaveAddress: Int, command: UInt8) throws -> UInt8
     func readWord     ( _ slaveAddress: Int, command: UInt8) throws -> UInt16
     func readData     ( _ slaveAddress: Int, command: UInt8) throws -> [UInt8]
-    func readI2CData  ( _ slaveAddress: Int, command: UInt8) throws -> [UInt8]
+    func readI2CData  ( _ slaveAddress: Int, command: UInt8, length: UInt8) throws -> [UInt8]
     func readRaw      ( _ slaveAddress: Int, length: Int) throws -> [UInt8]
 
     func writeQuick   ( _ slaveAddress: Int ) throws
@@ -221,18 +221,22 @@ public final class I2C: I2CInterface
 
         guard data[0] <=  SMB_MAX_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EMSGSIZE ) }
 
-        return Array<UInt8>( data[ 1 ... Int( data[0] )] )
+        return Array( data[ 1 ... Int( data[0] )] )
     }
 
     // ------------------------------------------------------------------------
     //  Function readI2CData (with command)
     // ------------------------------------------------------------------------
 
-    public func readI2CData( _ slaveAddress: Int, command: UInt8 ) throws -> [UInt8] 
+    public func readI2CData( _ slaveAddress: Int, command: UInt8, length: UInt8 ) throws -> [UInt8] 
     {
+        guard length <= SMB_MAX_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EINVAL ) }
+
         try setSlaveAddress( slaveAddress )
 
-        var data = [UInt8]( repeating: 0, count: SMB_MAX_PAYLOAD_LENGTH )
+        var data = [UInt8]( repeating: 0, count: Int( length ) + 1 )
+
+        data[0] = length
 
         let r = smbus_ioctl( rw:      I2C_SMBUS_READ,
                              command: command,
@@ -243,7 +247,7 @@ public final class I2C: I2CInterface
 
         guard r <= SMB_MAX_PAYLOAD_LENGTH else { throw POSIXError( POSIXError.EMSGSIZE ) }
 
-        return Array<UInt8>( data[0 ..< Int( r )] )
+        return Array( data[1 ... Int( length )] )
     }
 
     // ------------------------------------------------------------------------
@@ -515,7 +519,7 @@ public final class I2C: I2CInterface
     }
  
     // ------------------------------------------------------------------------
-    //  Private Function setSlaveAddress
+    //  Private Function openI2C
     // ------------------------------------------------------------------------
 
     private func openI2C() throws 
@@ -528,7 +532,7 @@ public final class I2C: I2CInterface
     }
  
     // ------------------------------------------------------------------------
-    //  Private Function setSlaveAddress
+    //  Private Function closeI2C
     // ------------------------------------------------------------------------
 
     private func closeI2C() 
@@ -578,24 +582,31 @@ public final class I2C: I2CInterface
 }
 
 // MARK: - I2C/SMBUS Constants
-internal let I2C_SMBUS_READ: UInt8 =   1
+internal let I2C_SMBUS_READ:  UInt8 =  1
 internal let I2C_SMBUS_WRITE: UInt8 =  0
 
-internal let I2C_SMBUS_QUICK: Int32 = 0
-internal let I2C_SMBUS_BYTE: Int32 = 1
-internal let I2C_SMBUS_BYTE_DATA: Int32 = 2
-internal let I2C_SMBUS_WORD_DATA: Int32 = 3
-internal let I2C_SMBUS_BLOCK_DATA: Int32 = 5
+internal let I2C_SMBUS_QUICK:          Int32 = 0 // SMBus quick write (no command or data)
+internal let I2C_SMBUS_BYTE:           Int32 = 1 // SMBus transfer single byte (no command)
+internal let I2C_SMBUS_BYTE_DATA:      Int32 = 2 // SMBus transfer command and one byte
+internal let I2C_SMBUS_WORD_DATA:      Int32 = 3 // SMBus transfer command and two byte word (little-endian)
+internal let I2C_SMBUS_BLOCK_DATA:     Int32 = 5 // SMBus transfer command, length byte, and data
 //Not implemented: I2C_SMBUS_I2C_BLOCK_BROKEN  6
 //Not implemented:  I2C_SMBUS_BLOCK_PROC_CALL   7
-internal let I2C_SMBUS_I2C_BLOCK_DATA: Int32 = 8
+internal let I2C_SMBUS_I2C_BLOCK_DATA: Int32 = 8 // I2C transfer command and data (no length byte)
 
-internal let I2C_SLAVE: UInt = 0x703
-internal let I2C_SLAVE_FORCE: UInt = 0x706
-internal let I2C_RDWR: UInt = 0x707
-internal let I2C_PEC: UInt = 0x708
-internal let I2C_SMBUS: UInt = 0x720
+// Note: the I2C_SMBUS_I2C_BLOCK_DATA transfer is not part of the SMB definition and does not
+//       support the option PEC byte.  It is, however, limited to the SMB maximum buffer size.
+
+internal let I2C_SLAVE:       UInt = 0x0703 // Set slave address
+internal let I2C_TENBIT:      UInt = 0x0704 // 0 for 7 bit addrs, != 0 for 10 bit
+internal let I2C_FUNCS:       UInt = 0x0705 // Get the adapter functionality mask
+internal let I2C_SLAVE_FORCE: UInt = 0x0706 // Force setting slave address
+internal let I2C_RDWR:        UInt = 0x0707 // Combined read and write operation
+internal let I2C_PEC:         UInt = 0x0708 // != 0 to use PEC with SMB calls
+internal let I2C_SMBUS:       UInt = 0x0720 // SMBus Transfer
+
 internal let SMB_MAX_PAYLOAD_LENGTH: Int = 32
+
 internal let I2CBASEPATH="/dev/i2c-"
 
 internal let I2C_M_RD: UInt16 = 0x0001
